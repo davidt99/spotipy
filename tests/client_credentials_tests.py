@@ -1,17 +1,19 @@
 # -*- coding: latin-1 -*-
 
-import spotipy
-from  spotipy.oauth2 import SpotifyClientCredentials
 import unittest
+
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
 
 '''
     Client Credentials Requests Tests
 '''
 
+
 class ClientCredentialsTestSpotipy(unittest.TestCase):
-    '''
+    """
         These tests require user authentication
-    '''
+    """
 
     muse_urn = 'spotify:artist:12Chz98pHFMPJEknJQMWvI'
 

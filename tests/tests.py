@@ -1,13 +1,12 @@
-# -*- coding: latin-1 -*-
-import spotipy
 import unittest
-import pprint
+
 import requests
+
+import spotipy
 from spotipy.client import SpotifyException
 
 
 class TestSpotipy(unittest.TestCase):
-
     creep_urn = 'spotify:track:3HfB5hBU0dmBt8T0iCmH42'
     creep_id = '3HfB5hBU0dmBt8T0iCmH42'
     creep_url = 'http://open.spotify.com/track/3HfB5hBU0dmBt8T0iCmH42'
@@ -18,7 +17,6 @@ class TestSpotipy(unittest.TestCase):
     pablo_honey_urn = 'spotify:album:6AZv3m27uyRxi8KyJSfUxL'
     radiohead_urn = 'spotify:artist:4Z8W4fKeB5YxbusRsdQVPb'
     angeles_haydn_urn = 'spotify:album:1vAbqAeuJVWNAe7UR00bdM'
-
 
     bad_id = 'BAD_ID'
 
@@ -41,7 +39,7 @@ class TestSpotipy(unittest.TestCase):
     def test_album_tracks(self):
         results = self.spotify.album_tracks(self.pinkerton_urn)
         self.assertTrue(len(results['items']) == 10)
-    
+
     def test_album_tracks_many(self):
         results = self.spotify.album_tracks(self.angeles_haydn_urn)
         tracks = results['items']
@@ -72,7 +70,7 @@ class TestSpotipy(unittest.TestCase):
 
     def test_track_bad_urn(self):
         try:
-            track = self.spotify.track(self.el_scorcho_bad_urn)
+            self.spotify.track(self.el_scorcho_bad_urn)
             self.assertTrue(False)
         except spotipy.SpotifyException:
             self.assertTrue(True)
@@ -88,6 +86,7 @@ class TestSpotipy(unittest.TestCase):
         self.assertTrue(len(results['tracks']) == 10)
 
     def test_artist_related_artists(self):
+        found = False
         results = self.spotify.artist_related_artists(self.weezer_urn)
         self.assertTrue('artists' in results)
         self.assertTrue(len(results['artists']) == 20)
@@ -123,11 +122,10 @@ class TestSpotipy(unittest.TestCase):
     def test_search_timeout(self):
         sp = spotipy.Spotify(requests_timeout=.1)
         try:
-            results = sp.search(q='my*', type='track')
+            sp.search(q='my*', type='track')
             self.assertTrue(False, 'unexpected search timeout')
         except requests.ReadTimeout:
             self.assertTrue(True, 'expected search timeout')
-
 
     def test_album_search(self):
         results = self.spotify.search(q='weezer pinkerton', type='album')
@@ -147,14 +145,7 @@ class TestSpotipy(unittest.TestCase):
 
     def test_track_bad_id(self):
         try:
-            track = self.spotify.track(self.bad_id)
-            self.assertTrue(False)
-        except spotipy.SpotifyException:
-            self.assertTrue(True)
-
-    def test_track_bad_id(self):
-        try:
-            track = self.spotify.track(self.bad_id)
+            self.spotify.track(self.bad_id)
             self.assertTrue(False)
         except spotipy.SpotifyException:
             self.assertTrue(True)
@@ -163,7 +154,7 @@ class TestSpotipy(unittest.TestCase):
         with self.assertRaises(SpotifyException) as cm:
             self.spotify.user_playlist_create("spotify", "Best hits of the 90s")
         self.assertTrue(cm.exception.http_status == 401 or
-            cm.exception.http_status == 403)
+                        cm.exception.http_status == 403)
 
     def test_custom_requests_session(self):
         from requests import Session
@@ -177,7 +168,6 @@ class TestSpotipy(unittest.TestCase):
         with_no_session = spotipy.Spotify(requests_session=False)
         self.assertFalse(isinstance(with_no_session._session, Session))
         self.assertTrue(with_no_session.user(user="akx")["uri"] == "spotify:user:akx")
-
 
 
 '''

@@ -1,13 +1,10 @@
-from spotipy.oauth2 import SpotifyOAuth
-import json
 import io
+import json
 import unittest
+import unittest.mock as mock
+from urllib import parse
 
-try:
-    import unittest.mock as mock
-except ImportError:
-    import mock
-import six.moves.urllib.parse as urllibparse
+from spotipy.oauth2 import SpotifyOAuth
 
 patch = mock.patch
 DEFAULT = mock.DEFAULT
@@ -122,8 +119,8 @@ class TestSpotifyOAuth(unittest.TestCase):
 
         url = oauth.get_authorize_url()
 
-        parsed_url = urllibparse.urlparse(url)
-        parsed_qs = urllibparse.parse_qs(parsed_url.query)
+        parsed_url = parse.urlparse(url)
+        parsed_qs = parse.parse_qs(parsed_url.query)
         self.assertNotIn('state', parsed_qs)
 
     def test_get_authorize_url_passes_state_from_constructor(self):
@@ -132,8 +129,8 @@ class TestSpotifyOAuth(unittest.TestCase):
 
         url = oauth.get_authorize_url()
 
-        parsed_url = urllibparse.urlparse(url)
-        parsed_qs = urllibparse.parse_qs(parsed_url.query)
+        parsed_url = parse.urlparse(url)
+        parsed_qs = parse.parse_qs(parsed_url.query)
         self.assertEqual(parsed_qs['state'][0], state)
 
     def test_get_authorize_url_passes_state_from_func_call(self):
@@ -142,8 +139,8 @@ class TestSpotifyOAuth(unittest.TestCase):
 
         url = oauth.get_authorize_url(state=state)
 
-        parsed_url = urllibparse.urlparse(url)
-        parsed_qs = urllibparse.parse_qs(parsed_url.query)
+        parsed_url = parse.urlparse(url)
+        parsed_qs = parse.parse_qs(parsed_url.query)
         self.assertEqual(parsed_qs['state'][0], state)
 
     def test_get_authorize_url_does_not_show_dialog_by_default(self):
@@ -151,8 +148,8 @@ class TestSpotifyOAuth(unittest.TestCase):
 
         url = oauth.get_authorize_url()
 
-        parsed_url = urllibparse.urlparse(url)
-        parsed_qs = urllibparse.parse_qs(parsed_url.query)
+        parsed_url = parse.urlparse(url)
+        parsed_qs = parse.parse_qs(parsed_url.query)
         self.assertNotIn('show_dialog', parsed_qs)
 
     def test_get_authorize_url_shows_dialog_when_requested(self):
@@ -160,8 +157,8 @@ class TestSpotifyOAuth(unittest.TestCase):
 
         url = oauth.get_authorize_url(show_dialog=True)
 
-        parsed_url = urllibparse.urlparse(url)
-        parsed_qs = urllibparse.parse_qs(parsed_url.query)
+        parsed_url = parse.urlparse(url)
+        parsed_qs = parse.parse_qs(parsed_url.query)
         self.assertTrue(parsed_qs['show_dialog'])
 
 
