@@ -14,14 +14,7 @@ REDIRECT_ADDRESS = "http://localhost"
 REDIRECT_URI = "{}:{}".format(REDIRECT_ADDRESS, PORT)
 
 
-def prompt_for_user_token(
-    username,
-    scope=None,
-    client_id=None,
-    client_secret=None,
-    redirect_uri=None,
-    cache_path=None,
-):
+def prompt_for_user_token(username, scope=None, client_id=None, client_secret=None, redirect_uri=None, cache_path=None):
     """ prompts the user to login if necessary and returns
         the user token suitable for use with the spotipy.Spotify
         constructor
@@ -60,9 +53,7 @@ def prompt_for_user_token(
 
     redirect_uri = redirect_uri or REDIRECT_URI
     cache_path = cache_path or ".cache-" + username
-    sp_oauth = oauth2.SpotifyOAuth(
-        client_id, client_secret, redirect_uri, scope, cache_path=cache_path
-    )
+    sp_oauth = oauth2.SpotifyOAuth(client_id, client_secret, redirect_uri, scope, cache_path=cache_path)
 
     # try to get a valid token for this user, from the cache,
     # if not in the cache, the create a new (this will send
@@ -155,11 +146,7 @@ def get_authentication_code(httpd):
         code = httpd.latest_query_components["code"][0]
     else:
         raise spotipy.SpotifyException(
-            200,
-            -1,
-            "Unknown response from Spotify authentication server: {}".format(
-                httpd.latest_query_components
-            ),
+            200, -1, "Unknown response from Spotify authentication server: {}".format(httpd.latest_query_components)
         )
     return code
 

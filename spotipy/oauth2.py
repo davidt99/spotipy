@@ -16,8 +16,8 @@ _logger = logging.getLogger(__name__)
 
 
 def _make_authorization_headers(client_id, client_secret):
-    auth_header = base64.b64encode("{}:{}".format(client_id, client_secret))
-    return {"Authorization": "Basic {}".format(auth_header)}
+    auth_header = base64.b64encode("{}:{}".format(client_id, client_secret).encode("ascii"))
+    return {"Authorization": "Basic {}".format(auth_header.decode("ascii"))}
 
 
 def is_token_expired(token_info):
@@ -73,9 +73,7 @@ class SpotifyClientCredentials(object):
 
         headers = _make_authorization_headers(self.client_id, self.client_secret)
 
-        response = self._session.post(
-            self.OAUTH_TOKEN_URL, data=payload, headers=headers
-        )
+        response = self._session.post(self.OAUTH_TOKEN_URL, data=payload, headers=headers)
         if response.status_code != HTTPStatus.OK:
             raise exceptions.Oauth2Error(response.reason)
         token_info = response.json()
@@ -103,7 +101,7 @@ class SpotifyOAuth(object):
         client_id: str,
         client_secret: str,
         redirect_uri: str,
-        scopes: Union[str, Sequence[str]],
+        scopes: Union[str, Sequence[str]] = None,
         state=None,
         cache_path=None,
         session=None,
@@ -127,6 +125,8 @@ class SpotifyOAuth(object):
         self.cache_path = cache_path
         if isinstance(scopes, str):
             self.scopes = scopes.split(" ")
+        elif not scopes:
+            self.scopes = []
         else:
             self.scopes = scopes
         if not session:
@@ -138,13 +138,14 @@ class SpotifyOAuth(object):
         token_info = None
         if self.cache_path:
             try:
+                if not os.path.isfile(self.cache_path):
+                    return None
+
                 with open(self.cache_path) as f:
                     token_info = json.load(f)
 
                 # if scopes don't match, then bail
-                if "scopes" not in token_info or not set(self.scopes).issubset(
-                    token_info["scopes"]
-                ):
+                if "scopes" not in token_info or not set(self.scopes).issubset(token_info["scopes"]):
                     return None
 
                 if is_token_expired(token_info):
@@ -170,10 +171,13 @@ class SpotifyOAuth(object):
             "client_id": self.client_id,
             "response_type": "code",
             "redirect_uri": self.redirect_uri,
-            "scope": " ".join(self.scopes),
             "state": state or self.state,
             "show_dialog": show_dialog,
         }
+
+        if self.scopes:
+            payload["scope"] = " ".join(self.scopes)
+
         return "{}?{}".format(self.OAUTH_AUTHORIZE_URL, parse.urlencode(payload))
 
     def parse_response_code(self, url):
@@ -202,15 +206,15 @@ class SpotifyOAuth(object):
             "redirect_uri": self.redirect_uri,
             "code": code,
             "grant_type": "authorization_code",
-            "scope": " ".join(self.scopes),
             "state": self.state,
         }
 
+        if self.scopes:
+            payload["scope"] = " ".join(self.scopes)
+
         headers = self._make_authorization_headers()
 
-        response = self.session.post(
-            self.OAUTH_TOKEN_URL, data=payload, headers=headers
-        )
+        response = self.session.post(self.OAUTH_TOKEN_URL, data=payload, headers=headers)
         if response.status_code != HTTPStatus.OK:
             raise exceptions.Oauth2Error(response.reason)
         token_info = response.json()
@@ -223,15 +227,9 @@ class SpotifyOAuth(object):
 
         headers = self._make_authorization_headers()
 
-        response = self.session.post(
-            self.OAUTH_TOKEN_URL, data=payload, headers=headers
-        )
+        response = self.session.post(self.OAUTH_TOKEN_URL, data=payload, headers=headers)
         if response.status_code != HTTPStatus.OK:
-            _logger.warning(
-                "couldn't refresh token: code: %d reason:%s",
-                response.status_code,
-                response.reason,
-            )
+            _logger.warning("couldn't refresh token: code: %d reason:%s", response.status_code, response.reason)
             return None
         token_info = response.json()
         token_info = self._add_custom_values_to_token_info(token_info)
