@@ -5,6 +5,8 @@ from http import HTTPStatus
 import spotipy
 from spotipy import exceptions
 
+USER_ID = "thetufik"
+
 
 class BaseSpec(unittest.TestCase):
     @classmethod
@@ -16,6 +18,7 @@ class BaseSpec(unittest.TestCase):
 
     def setUp(self) -> None:
         self.sp = spotipy.Spotify(auth=self.token)
+        self.user_id = USER_ID
 
 
 class ErrorSpec(BaseSpec):
@@ -312,6 +315,99 @@ class UserSpec(BaseSpec):
 
         # Assert
         self.assertIsNotNone(top_tracks)
+
+
+class PlaylistSpec(BaseSpec):
+    def setUp(self) -> None:
+        super().setUp()
+        self.playlist_id = None
+
+    def tearDown(self) -> None:
+        if self.playlist_id:
+            self.sp.playlist_unfollow(self.playlist_id)
+
+    def test_create_playlist(self):
+        # Arrange
+        name = "temp"
+
+        # Act
+        playlist = self.sp.user_playlist_create(self.user_id, name)
+        self.playlist_id = playlist["id"]
+
+        # Assert
+        self.assertEqual(name, playlist["name"])
+
+    def test_get_current_user_playlists(self):
+        # Act
+        playlists = self.sp.current_user_playlists()
+
+        # Assert
+        self.assertGreaterEqual(len(playlists["items"]), 10)
+
+    def test_get_user_playlists(self):
+        # Act
+        playlists = self.sp.user_playlists("shaytidhar")
+
+        # Assert
+        self.assertGreaterEqual(len(playlists["items"]), 10)
+
+    def test_get_playlist(self):
+        # Act
+        playlist = self.sp.playlist("spotify:playlist:1Ciepag1qhGM5yKYJPBK6z")
+
+        # Assert
+        self.assertEqual("beta classics", playlist["name"])
+
+    def test_get_playlist_tacks(self):
+        # Act
+        tracks = self.sp.playlist_tracks("spotify:playlist:1Ciepag1qhGM5yKYJPBK6z")
+
+        # Assert
+        self.assertGreaterEqual(len(tracks["items"]), 30)
+
+    def test_add_tack_to_playlist(self):
+        # Act 1
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+
+        snapshot = self.sp.playlist_add_tracks(self.playlist_id, ["spotify:track:3fU0407Cls1hLW1ap5w2Lr"], 0)
+
+        # Assert
+        self.assertIsNotNone(snapshot)
+
+    def test_remove_all_track_occurrences_tack_playlist(self):
+        # Act 1
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+        track = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
+        self.sp.playlist_add_tracks(self.playlist_id, [track], 0)
+        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track], 1)
+
+        # Assert 1
+        self.assertIsNotNone(snapshot)
+
+        # Act 2
+        self.sp.playlist_remove_all_occurrences_of_tracks(self.playlist_id, [track], snapshot["snapshot_id"])
+
+        #
+        playlist = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(0, playlist["total"])
+
+    def test_remove_one_track_occurrence_from_playlist(self):
+        # Act 1
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+        track = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
+        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track, track], 0)
+
+        # Assert 1
+        self.assertIsNotNone(snapshot)
+
+        # Act 2
+        self.sp.playlist_remove_specific_occurrences_of_tracks(
+            self.playlist_id, [{"uri": track, "positions": [1]}], snapshot["snapshot_id"]
+        )
+
+        # Assert 2
+        playlist = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(1, playlist["total"])
 
 
 if __name__ == "__main__":

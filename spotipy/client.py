@@ -33,6 +33,19 @@ class SpotifyException(Exception):
         return "http status: {0}, code:{1} - {2}".format(self.http_status, self.code, self.msg)
 
 
+def _assert_limit(limit_value, max_limit=50):
+    if limit_value is not None:
+        if not isinstance(limit_value, int):
+            raise TypeError("limit must be int")
+        if limit_value < 0 or limit_value > max_limit:
+            raise ValueError("limit must be between 1 and 50")
+
+
+def _assert_offset(offset):
+    if offset and (offset > 100000 or offset < 0):
+        raise ValueError("offset must be between 0 and 100.000")
+
+
 class Spotify(object):
     """
         Example usage::
@@ -113,26 +126,25 @@ class Spotify(object):
                 if response.status_code == HTTPStatus.NOT_FOUND and "device_id" in params:
                     raise exceptions.DeviceNotFoundError(error["error"]["message"])
                 raise exceptions.SpotifyRequestError(response.status_code, error["error"]["message"])
-            raise exceptions.SpotifyRequestError(response.status_code, None)
+            raise exceptions.SpotifyRequestError(response.status_code, "")
 
         response.raise_for_status()
 
         if response.status_code == HTTPStatus.NO_CONTENT:
             return None
-        return response.json()
+        if response.content:
+            return response.json()
 
-    def _get(self, url, **params):
+    def _get(self, url: str, **params):
         return self._internal_call("GET", url, params)
 
-    def _post(self, url, payload=None, **params):
+    def _post(self, url: str, payload: dict = None, **params):
         return self._internal_call("POST", url, params, payload)
 
-    def _delete(self, url, args=None, payload=None, **kwargs):
-        if args:
-            kwargs.update(args)
-        return self._internal_call("DELETE", url, payload, kwargs)
+    def _delete(self, url: str, payload: dict = None, **params):
+        return self._internal_call("DELETE", url, params, payload)
 
-    def _put(self, url, payload=None, **params):
+    def _put(self, url: str, payload: dict = None, **params):
         return self._internal_call("PUT", url, params, payload)
 
     def next(self, result):
@@ -230,7 +242,7 @@ class Spotify(object):
                 - limit  - the number of albums to return
                 - offset - the index of the first album to return
         """
-        self._assert_limit(limit)
+        _assert_limit(limit)
         return self._get(
             "artists/{}/albums".format(self._get_id("artist", artist_id)),
             include_groups=include_groups,
@@ -278,7 +290,7 @@ class Spotify(object):
                 - limit  - the number of items to return
                 - offset - the index of the first item to return
         """
-        self._assert_limit(limit)
+        _assert_limit(limit)
         return self._get("albums/{}/tracks/".format(self._get_id("album", album_id)), limit=limit, offset=offset)
 
     def albums(self, albums: Sequence[str]):
@@ -317,10 +329,12 @@ class Spotify(object):
                 - limit  - the number of items to return
                 - offset - the index of the first item to return
         """
-        self._assert_limit(limit)
+        _assert_limit(limit)
+        _assert_offset(offset)
+
         return self._get("me/playlists", limit=limit, offset=offset)
 
-    def user_playlists(self, user, limit: str = None, offset: str = None):
+    def user_playlists(self, user: str, limit: int = None, offset: int = None):
         """ Gets playlists of a user
 
             Parameters:
@@ -328,39 +342,38 @@ class Spotify(object):
                 - limit  - the number of items to return
                 - offset - the index of the first item to return
         """
-        url = "users/%s/playlists" % user
-        return self._get(url, limit=limit, offset=offset)
+        _assert_limit(limit)
+        _assert_offset(offset)
+        return self._get("users/{}/playlists".format(user), limit=limit, offset=offset)
 
-    def user_playlist(self, user, playlist_id=None, fields=None):
+    def playlist(self, playlist_id: str, fields: str = None, market: str = None):
         """ Gets playlist of a user
             Parameters:
-                - user - the id of the user
                 - playlist_id - the id of the playlist
                 - fields - which fields to return
         """
-        if playlist_id is None:
-            url = "users/%s/starred" % user
-            return self._get(url, fields=fields)
-        plid = self._get_id("playlist", playlist_id)
-        url = "users/%s/playlists/%s" % (user, plid)
-        return self._get(url, fields=fields)
+        return self._get("playlists/" + self._get_id("playlist", playlist_id), fields=fields, market=market)
 
-    def user_playlist_tracks(self, user, playlist_id=None, fields=None, limit=100, offset=0, market: str = None):
+    def playlist_tracks(
+        self, playlist_id: str, fields: str = None, limit: int = None, offset: int = None, market: str = None
+    ):
         """ Get full details of the tracks of a playlist owned by a user.
 
             Parameters:
-                - user - the id of the user
                 - playlist_id - the id of the playlist
                 - fields - which fields to return
                 - limit - the maximum number of tracks to return
                 - offset - the index of the first track to return
                 - market - an ISO 3166-1 alpha-2 country code.
         """
-        plid = self._get_id("playlist", playlist_id)
-        url = "users/%s/playlists/%s/tracks" % (user, plid)
+        _assert_limit(limit, 100)
+        _assert_offset(offset)
+        url = "playlists/{}/tracks".format(self._get_id("playlist", playlist_id))
         return self._get(url, limit=limit, offset=offset, fields=fields, market=market)
 
-    def user_playlist_create(self, user, name, public=True, description=""):
+    def user_playlist_create(
+        self, user: str, name: str, public: bool = None, collaborative: bool = None, description: str = None
+    ):
         """ Creates a playlist for a user
 
             Parameters:
@@ -369,13 +382,16 @@ class Spotify(object):
                 - public - is the created playlist public
                 - description - the description of the playlist
         """
-        data = {"name": name, "public": public, "description": description}
-        url = "users/%s/playlists" % user
-        return self._post(url, payload=data)
+        payload = {"name": name}
+        if public is not None:
+            payload["public"] = public
+        if collaborative is not None:
+            payload["collaborative"] = collaborative
+        if description:
+            payload["description"] = description
+        return self._post("users/{}/playlists".format(user), payload=payload)
 
-    def user_playlist_change_details(
-        self, user, playlist_id, name=None, public=None, collaborative=None, description=None
-    ):
+    def playlist_change_details(self, playlist_id: str, name=None, public=None, collaborative=None, description=None):
         """ Changes a playlist's name and/or public/private state
 
             Parameters:
@@ -396,34 +412,32 @@ class Spotify(object):
             data["collaborative"] = collaborative
         if isinstance(description, str):
             data["description"] = description
-        url = "users/%s/playlists/%s" % (user, playlist_id)
+        url = "playlists/%s" % playlist_id
         return self._put(url, payload=data)
 
-    def user_playlist_unfollow(self, user, playlist_id):
+    def playlist_unfollow(self, playlist_id: str):
         """ Unfollows (deletes) a playlist for a user
 
             Parameters:
-                - user - the id of the user
-                - name - the name of the playlist
+                - playlist_id - the name of the playlist
         """
-        url = "users/%s/playlists/%s/followers" % (user, playlist_id)
-        return self._delete(url)
+        return self._delete("playlists/{}/followers".format(playlist_id))
 
-    def user_playlist_add_tracks(self, user, playlist_id, tracks, position=None):
+    def playlist_add_tracks(self, playlist_id: str, tracks: List[str], position=None):
         """ Adds tracks to a playlist
 
             Parameters:
-                - user - the id of the user
                 - playlist_id - the id of the playlist
                 - tracks - a list of track URIs, URLs or IDs
                 - position - the position to add the tracks
         """
-        plid = self._get_id("playlist", playlist_id)
-        ftracks = [self._get_uri("track", tid) for tid in tracks]
-        url = "users/%s/playlists/%s/tracks" % (user, plid)
-        return self._post(url, payload=ftracks, position=position)
+        payload = {"uris": [self._get_uri("track", track_id) for track_id in tracks]}
+        if position is not None:
+            payload["position"] = position
+        url = "playlists/{}/tracks".format(self._get_id("playlist", playlist_id))
+        return self._post(url, payload=payload)
 
-    def user_playlist_replace_tracks(self, user, playlist_id, tracks):
+    def playlist_replace_tracks(self, playlist_id: str, tracks):
         """ Replace all tracks in a playlist
 
             Parameters:
@@ -434,12 +448,10 @@ class Spotify(object):
         plid = self._get_id("playlist", playlist_id)
         ftracks = [self._get_uri("track", tid) for tid in tracks]
         payload = {"uris": ftracks}
-        url = "users/%s/playlists/%s/tracks" % (user, plid)
+        url = "playlists/{}/tracks".format(plid)
         return self._put(url, payload=payload)
 
-    def user_playlist_reorder_tracks(
-        self, user, playlist_id, range_start, insert_before, range_length=1, snapshot_id=None
-    ):
+    def playlist_reorder_tracks(self, playlist_id: str, range_start, insert_before, range_length=1, snapshot_id=None):
         """ Reorder tracks in a playlist
 
             Parameters:
@@ -454,33 +466,29 @@ class Spotify(object):
         payload = {"range_start": range_start, "range_length": range_length, "insert_before": insert_before}
         if snapshot_id:
             payload["snapshot_id"] = snapshot_id
-        url = "users/%s/playlists/%s/tracks" % (user, plid)
+        url = "playlists/%s/tracks" % plid
         return self._put(url, payload=payload)
 
-    def user_playlist_remove_all_occurrences_of_tracks(self, user, playlist_id, tracks, snapshot_id=None):
+    def playlist_remove_all_occurrences_of_tracks(self, playlist_id: str, tracks: List[str], snapshot_id: str = None):
         """ Removes all occurrences of the given tracks from the given playlist
 
             Parameters:
-                - user - the id of the user
                 - playlist_id - the id of the playlist
                 - tracks - the list of track ids to add to the playlist
                 - snapshot_id - optional id of the playlist snapshot
 
         """
-
-        plid = self._get_id("playlist", playlist_id)
-        ftracks = [self._get_uri("track", tid) for tid in tracks]
-        payload = {"tracks": [{"uri": track} for track in ftracks]}
+        payload = {"tracks": [{"uri": self._get_uri("track", track)} for track in tracks]}
         if snapshot_id:
             payload["snapshot_id"] = snapshot_id
-        url = "users/%s/playlists/%s/tracks" % (user, plid)
-        return self._delete(url, payload=payload)
+        return self._delete("playlists/{}/tracks".format(self._get_id("playlist", playlist_id)), payload=payload)
 
-    def user_playlist_remove_specific_occurrences_of_tracks(self, user, playlist_id, tracks, snapshot_id=None):
+    def playlist_remove_specific_occurrences_of_tracks(
+        self, playlist_id: str, tracks: List[dict], snapshot_id: str = None
+    ):
         """ Removes all occurrences of the given tracks from the given playlist
 
             Parameters:
-                - user - the id of the user
                 - playlist_id - the id of the playlist
                 - tracks - an array of objects containing Spotify URIs of the tracks to remove with their current
                  positions in the playlist.  For example:
@@ -489,17 +497,15 @@ class Spotify(object):
                 - snapshot_id - optional id of the playlist snapshot
         """
 
-        plid = self._get_id("playlist", playlist_id)
-        ftracks = []
-        for tr in tracks:
-            ftracks.append({"uri": self._get_uri("track", tr["uri"]), "positions": tr["positions"]})
-        payload = {"tracks": ftracks}
+        payload = {
+            "tracks": [{"uri": self._get_uri("track", tr["uri"]), "positions": tr["positions"]} for tr in tracks]
+        }
+
         if snapshot_id:
             payload["snapshot_id"] = snapshot_id
-        url = "users/%s/playlists/%s/tracks" % (user, plid)
-        return self._delete(url, payload=payload)
+        return self._delete("playlists/{}/tracks".format(self._get_id("playlist", playlist_id)), payload=payload)
 
-    def user_playlist_follow_playlist(self, playlist_owner_id, playlist_id):
+    def follow_playlist(self, playlist_id):
         """
         Add the current authenticated user as a follower of a playlist.
 
@@ -508,7 +514,7 @@ class Spotify(object):
             - playlist_id - the id of the playlist
 
         """
-        url = "users/{}/playlists/{}/followers".format(playlist_owner_id, playlist_id)
+        url = "playlists/{}/followers".format(playlist_id)
         return self._put(url)
 
     def user_playlist_is_following(self, playlist_owner_id, playlist_id, user_ids):
@@ -620,7 +626,7 @@ class Spotify(object):
                 - time_range - Over what time frame are the affinities computed
                   Valid-values: short_term, medium_term, long_term
         """
-        self._assert_limit(limit)
+        _assert_limit(limit)
         if time_range and time_range not in ("short_term", "medium_term", "long_term"):
             raise ValueError("time_range can be one of short_term, medium_term, long_term")
 
@@ -635,7 +641,7 @@ class Spotify(object):
                 - time_range - Over what time frame are the affinities computed
                   Valid-values: short_term, medium_term, long_term
         """
-        self._assert_limit(limit)
+        _assert_limit(limit)
         if time_range and time_range not in ("short_term", "medium_term", "long_term"):
             raise ValueError("time_range can be one of short_term, medium_term, long_term")
 
@@ -647,7 +653,7 @@ class Spotify(object):
             Parameters:
                 - limit - the number of entities to return
         """
-        self._assert_limit(limit)
+        _assert_limit(limit)
         if before and after:
             raise ValueError("before and after can't be set together")
         return self._get("me/player/recently-played", limit=limit, before=before, after=after)
@@ -983,13 +989,6 @@ class Spotify(object):
             raise TypeError("state must be a boolean")
 
         self._put("me/player/shuffle", state=state, device_id=device_id)
-
-    def _assert_limit(self, limit):
-        if limit is not None:
-            if not isinstance(limit, int):
-                raise TypeError("limit must be int")
-            if limit < 0 or limit > 50:
-                raise ValueError("limit must be between 1 and 50")
 
     def _get_id(self, type, id):
         fields = id.split(":")
