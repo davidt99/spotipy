@@ -409,6 +409,67 @@ class PlaylistSpec(BaseSpec):
         playlist = self.sp.playlist_tracks(self.playlist_id)
         self.assertEqual(1, playlist["total"])
 
+    def test_replace_playlist_tracks(self):
+        # Act 1
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+        track = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
+        new_track = "spotify:track:2JB7PvDV0R3Vwbq0iy1WPe"
+        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track, track], 0)
+
+        # Assert 1
+        self.assertIsNotNone(snapshot)
+
+        # Act 2
+        self.sp.playlist_replace_tracks(self.playlist_id, [new_track])
+
+        # Assert 2
+        playlist = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(1, playlist["total"])
+        self.assertEqual(new_track, playlist["items"][0]["track"]["uri"])
+
+    def test_reorder_playlist_tracks(self):
+        # Act 1
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+        track_1 = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
+        track_2 = "spotify:track:2JB7PvDV0R3Vwbq0iy1WPe"
+        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track_1, track_2], 0)
+
+        # Assert 1
+        self.assertIsNotNone(snapshot)
+
+        # Act 2
+        self.sp.playlist_reorder_tracks(self.playlist_id, 1, 0, snapshot_id=snapshot["snapshot_id"])
+
+        # Assert 2
+        playlist = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(2, playlist["total"])
+        self.assertEqual(track_2, playlist["items"][0]["track"]["uri"])
+        self.assertEqual(track_1, playlist["items"][1]["track"]["uri"])
+
+    def test_follow_and_unfollow_playlist(self):
+        # Act 1
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+        track_1 = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
+        track_2 = "spotify:track:2JB7PvDV0R3Vwbq0iy1WPe"
+        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track_1, track_2], 0)
+
+        # Assert 1
+        self.assertIsNotNone(snapshot)
+
+        # Act 2
+        self.sp.playlist_unfollow(self.playlist_id)
+
+        # Assert 2
+        is_following = self.sp.is_users_follow_playlist(self.playlist_id, [self.user_id])
+        self.assertFalse(is_following)
+
+        # Act 3
+        self.sp.follow_playlist(self.playlist_id)
+
+        # Assert 3
+        is_following = self.sp.is_users_follow_playlist(self.playlist_id, [self.user_id])
+        self.assertTrue(is_following)
+
 
 if __name__ == "__main__":
     unittest.main()
