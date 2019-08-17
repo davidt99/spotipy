@@ -1,4 +1,3 @@
-
 # Add tracks to 'Your Collection' of saved tracks
 
 import pprint
@@ -7,13 +6,13 @@ import sys
 import spotipy
 import spotipy.util as util
 
-scope = 'user-library-modify'
+scope = "user-library-modify"
 
 if len(sys.argv) > 2:
     username = sys.argv[1]
     tids = sys.argv[2:]
 else:
-    print("Usage: %s username track-id ..." % (sys.argv[0],))
+    print("Usage: {} username track-id ...".format(sys.argv[0]))
     sys.exit()
 
 token = util.prompt_for_user_token(username, scope)
