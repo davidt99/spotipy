@@ -1,94 +1,116 @@
 import contextlib
-import os
 import socket
+import time
 from http.server import BaseHTTPRequestHandler
 from http.server import HTTPServer
+from urllib import parse
 from urllib.parse import parse_qs
 from urllib.parse import urlparse
 
+import requests
+
 from spotipy import exceptions
-from . import oauth2
+from spotipy import auth
 
 PORT = 8080
 REDIRECT_ADDRESS = "http://localhost"
 REDIRECT_URI = "{}:{}".format(REDIRECT_ADDRESS, PORT)
 
 
-def prompt_for_user_token(username, scope=None, client_id=None, client_secret=None, redirect_uri=None, cache_path=None):
+def prompt_user_for_authorization_code_provider(
+    client_id: str,
+    client_secret: str,
+    redirect_uri: str = None,
+    scope: str = None,
+    state: str = None,
+    show_dialog=False,
+    persist_file_path: str = None,
+    requests_session: requests.Session = None,
+    deploy_local_server=False,
+) -> auth.AuthorizationCode:
     """ prompts the user to login if necessary and returns
         the user token suitable for use with the spotipy.Spotify
         constructor
 
         Parameters:
-
-         - username - the Spotify username
-         - scope - the desired scope of the request
          - client_id - the client id of your app
          - client_secret - the client secret of your app
-         - cache_path - path to location to save tokens
+         - redirect_uri - The URI to redirect to after the user grants/denies permission
+         - scope - the desired scope of the request
+
+         - persist_file_path - path to location to save tokens
+         - requests_session - a request.Session object
+         - deploy_local_server - if true, will deploy local server to get the authorization code automatically
 
     """
 
-    if not client_id:
-        client_id = os.getenv("SPOTIPY_CLIENT_ID")
+    redirect_uri = redirect_uri if not deploy_local_server else redirect_uri or REDIRECT_URI
+    if not redirect_uri:
+        raise ValueError("redirect_uri must be supplied of deploy_local_server is false")
 
-    if not client_secret:
-        client_secret = os.getenv("SPOTIPY_CLIENT_SECRET")
+    params = {"client_id": client_id, "response_type": "code", "redirect_uri": redirect_uri}
 
-    if not client_id:
-        print(
-            """
-            You need to set your Spotify API credentials. You can do this by
-            setting environment variables like so:
+    if scope:
+        params["scope"] = scope
+    if state:
+        params["state"] = state
+    if show_dialog is not None:
+        params["show_dialog"] = show_dialog
 
-            export SPOTIPY_CLIENT_ID='your-spotify-client-id'
-            export SPOTIPY_CLIENT_SECRET='your-spotify-client-secret'
-            export SPOTIPY_REDIRECT_URI='your-app-redirect-url'
-
-            Get your credentials at     
-                https://developer.spotify.com/my-applications
+    auth_url = "{}?{}".format("https://accounts.spotify.com/authorize", parse.urlencode(params))
+    print(
         """
-        )
-        raise ValueError("no credentials set")
 
-    redirect_uri = redirect_uri or REDIRECT_URI
-    cache_path = cache_path or ".cache-" + username
-    sp_oauth = oauth2.SpotifyOAuth(client_id, client_secret, redirect_uri, scope, cache_path=cache_path)
+        User authentication requires interaction with your
+        web browser. You will be prompted to enter your 
+        credentials and give authorization.
 
-    # try to get a valid token for this user, from the cache,
-    # if not in the cache, the create a new (this will send
-    # the user to a web page where they can authorize this app)
+    """
+    )
 
-    token_info = sp_oauth.get_cached_token()
-
-    if not token_info:
-        print(
-            """
-
-            User authentication requires interaction with your
-            web browser. You will be prompted to enter your 
-            credentials and give authorization.
-
-        """
-        )
-
-        auth_url = sp_oauth.get_authorize_url()
+    code = None
+    if deploy_local_server:
         with local_server(redirect_uri) as httpd:
-            try:
-                import webbrowser
-
-                webbrowser.open(auth_url)
-                print("Opened {} in your browser".format(auth_url))
-            except Exception:
-                print("Please navigate here: {}".format(auth_url))
-
+            _open_browser(auth_url)
             code = get_authentication_code(httpd)
-        token_info = sp_oauth.get_access_token(code)
-    # Auth'ed API request
-    if token_info:
-        return token_info["access_token"]
-    else:
-        return None
+
+    if not code:
+        _open_browser(auth_url)
+        url = input("Please paste the url you were redirect to:")
+        parsed_url = parse.urlparse(url)
+        if not parsed_url.query:
+            raise ValueError("invalid url")
+        code = parse_qs(parsed_url.query)["code"][0]
+
+    payload = {"code": code, "grant_type": "authorization_code", "redirect_uri": redirect_uri}
+    now = int(time.time())
+    token_info = auth.request_token(payload, client_id, client_secret, requests_session)
+    refresh_token = token_info["refresh_token"]
+    access_token = token_info["access_token"]
+    access_token_expires_at = token_info["expires_in"] + now
+    auth_provider = auth.AuthorizationCode(
+        client_id,
+        client_secret,
+        refresh_token,
+        access_token,
+        access_token_expires_at,
+        persist_file_path,
+        requests_session,
+    )
+
+    if persist_file_path:
+        auth_provider.save()
+    return auth_provider
+
+
+def _open_browser(auth_url):
+    import webbrowser
+
+    try:
+        webbrowser.open(auth_url)
+        print("Opened {} in your browser".format(auth_url))
+    except Exception:
+        print("Please navigate here: {}".format(auth_url))
 
 
 def assert_port_available(port):

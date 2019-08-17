@@ -7,13 +7,13 @@ class DeviceNotFoundError(SpotifyError):
 
 
 class SpotifyRequestError(SpotifyError):
-    def __init__(self, status: int, message: str):
-        super().__init__("spotify api returned {} status code: {}".format(status, message))
-        self.status = status
+    def __init__(self, status_code: int, message: str):
+        super().__init__("spotify api returned {} status code. error: {}".format(status_code, message))
+        self.status = status_code
         self.message = message
 
 
-class Oauth2Error(SpotifyError):
+class AuthorizationError(SpotifyRequestError):
     pass
 
 

@@ -1,8 +1,8 @@
-import json
 import unittest
 from http import HTTPStatus
 
 import spotipy
+from spotipy import auth
 from spotipy import exceptions
 
 USER_ID = "thetufik"
@@ -11,13 +11,10 @@ USER_ID = "thetufik"
 class BaseSpec(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        with open(".cache") as f:
-            token_info = json.load(f)
-
-        cls.token = token_info["access_token"]
+        cls.auth_provider = auth.AuthorizationCode.load(".cache")
 
     def setUp(self) -> None:
-        self.sp = spotipy.Spotify(auth=self.token)
+        self.sp = spotipy.Spotify(self.auth_provider)
         self.user_id = USER_ID
 
 
@@ -139,7 +136,7 @@ class ArtistsSpec(BaseSpec):
         artist_id = "spotify:artist:4pejUc4iciQfgdX6OKulQn"
 
         # Act
-        top_tracks = self.sp.artist_top_tracks(artist_id)
+        top_tracks = self.sp.artist_top_tracks(artist_id, "US")
 
         # Assert
         self.assertEqual(10, len(top_tracks["tracks"]))
@@ -288,13 +285,13 @@ class PlayerSpec(BaseSpec):
         playback = self.sp.current_playback()
         self.assertEqual(playback["repeat_state"], "context")
 
-    def test_next(self):
-        # Act
-        self.sp.next_track()
-
     def test_previous(self):
         # Act
         self.sp.previous_track()
+
+    def test_next(self):
+        # Act
+        self.sp.next_track()
 
     def test_current_playback(self):
         # Act
@@ -311,11 +308,17 @@ class PlayerSpec(BaseSpec):
     def test_transfer_playback(self):
         # Arrange
         devices = self.sp.devices()
+        if len(devices) == 0:
+            self.skipTest("No devices found")
         self.assertGreaterEqual(len(devices), 1)
-        device = devices[1]
+        device = devices[0]
 
         # Act
         self.sp.transfer_playback(device["id"])
+
+        # Assert
+        playback = self.sp.current_playback()
+        self.assertEqual(playback["device"]["id"], device["id"])
 
     def test_recently_played(self):
         # Act

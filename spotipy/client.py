@@ -10,6 +10,7 @@ from urllib3.util import retry
 
 from spotipy import exceptions
 from spotipy import params_encoder
+from spotipy.auth import SpotifyAuthProvider
 
 """ A simple and thin Python library for the Spotify Web API
 """
@@ -85,31 +86,28 @@ class Spotify(object):
     """
 
     max_retries = 10
+    base_api_url = "https://api.spotify.com/v1/"
 
     def __init__(
         self,
-        auth=None,
-        client_credentials_manager=None,
+        auth_provider: SpotifyAuthProvider,
         requests_session: requests.Session = None,
         default_timeout: Union[int, Tuple[int, int]] = None,
     ):
         """
         Create a Spotify API object.
 
-        :param auth: An authorization token (optional)
+        :param auth_provider:
+            SpotifyAuthProvider object to use to authenticate
         :param requests_session:
             A Requests session object or a truthy value to create one.
             A falsy value disables sessions.
             It should generally be a good idea to keep sessions enabled
             for performance reasons (connection pooling).
-        :param client_credentials_manager:
-            SpotifyClientCredentials object
         :param default_timeout:
             Tell Requests to stop waiting for a response after a given number of seconds
         """
-        self.prefix = "https://api.spotify.com/v1/"
-        self._auth = auth
-        self.client_credentials_manager = client_credentials_manager
+        self.auth_provider = auth_provider
         self.timeout = default_timeout
         if requests_session:
             self._session = requests_session
@@ -119,21 +117,12 @@ class Spotify(object):
         rate_limit_retry = retry.Retry(self.max_retries, read=False, method_whitelist=["POST", "GET", "PUT", "DELETE"])
         self._session.mount("https://", requests.adapters.HTTPAdapter(max_retries=rate_limit_retry))
 
-    def _auth_headers(self):
-        if self._auth:
-            return {"Authorization": "Bearer {0}".format(self._auth)}
-        elif self.client_credentials_manager:
-            token = self.client_credentials_manager.get_access_token()
-            return {"Authorization": "Bearer {0}".format(token)}
-        else:
-            return {}
-
     def _internal_call(self, method: str, url: str, params: dict = None, payload: dict = None):
         if params:
             params = params_encoder.encode_params(params)
         if not url.startswith("http"):
-            url = self.prefix + url
-        headers = self._auth_headers()
+            url = self.base_api_url + url
+        headers = self.auth_provider.make_authorization_headers()
 
         response = self._session.request(method, url, params, headers=headers, json=payload, timeout=self.timeout)
         if response.status_code == HTTPStatus.TOO_MANY_REQUESTS:
@@ -295,7 +284,7 @@ class Spotify(object):
             offset=offset,
         )
 
-    def artist_top_tracks(self, artist_id: str, market="from_token"):
+    def artist_top_tracks(self, artist_id: str, market: str = "from_token"):
         """ Get Spotify catalog information about an artist's top tracks by country.
 
             Parameters:
