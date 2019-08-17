@@ -84,9 +84,9 @@ class AlbumSpec(BaseSpec):
         albums = self.sp.albums(albums_id)
 
         # Assert
-        self.assertEqual(len(albums_id), len(albums["albums"]))
-        self.assertEqual("Jungle", albums["albums"][0]["name"])
-        self.assertEqual("Little Dark Age", albums["albums"][1]["name"])
+        self.assertEqual(len(albums_id), len(albums))
+        self.assertEqual("Jungle", albums[0]["name"])
+        self.assertEqual("Little Dark Age", albums[1]["name"])
 
 
 class ArtistsSpec(BaseSpec):
@@ -109,9 +109,9 @@ class ArtistsSpec(BaseSpec):
         artists = self.sp.artists(artists_id)
 
         # Assert
-        self.assertEqual(len(artists_id), len(artists["artists"]))
-        self.assertEqual("Maribou State", artists["artists"][0]["name"])
-        self.assertEqual("Khruangbin", artists["artists"][1]["name"])
+        self.assertEqual(len(artists_id), len(artists))
+        self.assertEqual("Maribou State", artists[0]["name"])
+        self.assertEqual("Khruangbin", artists[1]["name"])
 
     def test_get_artist_albums(self):
         # Arrange
@@ -175,9 +175,9 @@ class TrackSpec(BaseSpec):
         tracks = self.sp.tracks(tracks_id)
 
         # Assert
-        self.assertEqual(len(tracks_id), len(tracks["tracks"]))
-        self.assertEqual("Un-Reborn Again", tracks["tracks"][0]["name"])
-        self.assertEqual("Eruption", tracks["tracks"][1]["name"])
+        self.assertEqual(len(tracks_id), len(tracks))
+        self.assertEqual("Un-Reborn Again", tracks[0]["name"])
+        self.assertEqual("Eruption", tracks[1]["name"])
 
     def test_get_track_audio_analysis(self):
         # Arrange
@@ -197,7 +197,17 @@ class TrackSpec(BaseSpec):
         audio_features = self.sp.tracks_audio_feature(tracks_id)
 
         # Assert
-        self.assertEqual(len(tracks_id), len(audio_features["audio_features"]))
+        self.assertEqual(len(tracks_id), len(audio_features))
+
+    def test_get_track_audio_features(self):
+        # Arrange
+        track_id = "spotify:track:2M7FKrVr8intZRw0JZ5BKi"
+
+        # Act
+        audio_features = self.sp.track_audio_feature(track_id)
+
+        # Assert
+        self.assertIsNotNone(audio_features)
 
 
 class PlayerSpec(BaseSpec):
@@ -469,6 +479,90 @@ class PlaylistSpec(BaseSpec):
         # Assert 3
         is_following = self.sp.is_users_follow_playlist(self.playlist_id, [self.user_id])
         self.assertTrue(is_following)
+
+
+class FollowSpec(BaseSpec):
+    def test_follow_and_unfollow_artists(self):
+        # Arrange
+        artist_id = ["spotify:artist:3Fobin2AT6OcrkLNsACzt4"]
+
+        # Act 1
+        self.sp.follow_artists(artist_id)
+
+        # Assert 1
+        is_following = self.sp.is_current_user_following_artists(artist_id)
+        self.assertTrue(is_following)
+
+        # Act 2
+        self.sp.unfollow_artists(artist_id)
+
+        # Assert 2
+        is_following = self.sp.is_current_user_following_artists(artist_id)
+        self.assertFalse(is_following)
+
+    def test_follow_and_unfollow_users(self):
+        # Arrange
+        user_id = ["spotify:user:shaytidhar"]
+        is_original_following = self.sp.is_current_user_following_users(user_id)
+
+        # Act 1
+        if is_original_following:
+            self.sp.unfollow_users(user_id)
+        else:
+            self.sp.follow_users(user_id)
+
+        # Assert 1
+        is_following = self.sp.is_current_user_following_users(user_id)
+        self.assertNotEqual(is_following, is_original_following)
+
+        # Act 2
+        if is_original_following:
+            self.sp.follow_users(user_id)
+        else:
+            self.sp.unfollow_users(user_id)
+
+        # Assert 2
+        is_following = self.sp.is_current_user_following_users(user_id)
+        self.assertEqual(is_original_following, is_following)
+
+
+class SearchSpec(BaseSpec):
+    def test_search_for_tracks(self):
+        # Act
+        result = self.sp.search2(["roadhouse", "blues"], ["track"])
+
+        # Assert
+        self.assertGreater(result["tracks"]["total"], 0)
+
+    def test_search_for_specific_track(self):
+        # Arrange
+        result = self.sp.search2(["roadhouse", "blues"], ["track"])
+        total = result["tracks"]["total"]
+
+        # Act
+        result = self.sp.search2(["roadhouse blues"], ["track"])
+        self.assertGreater(result["tracks"]["total"], 0)
+        self.assertGreater(total, result["tracks"]["total"])
+
+    def test_search_for_specific_track_with_exclusion(self):
+        # Arrange
+        exclude = ["artist:deep purple"]
+        result = self.sp.search2(["roadhouse blues"], ["track"])
+        total = result["tracks"]["total"]
+
+        # Act
+        result = self.sp.search2(["roadhouse blues"], ["track"], exclude)
+        self.assertGreater(total, result["tracks"]["total"])
+
+    @unittest.skip("There seems to be a bug in spotify")
+    def test_search_for_artist_with_optional(self):
+        # Arrange
+        result = self.sp.search2(["the doors"], ["artist"])
+        total = result["artists"]["total"]
+
+        # Act
+        result = self.sp.search2(["the doors"], ["artist"], optional="abba")
+        self.assertGreater(result["tracks"]["total"], total)
 
 
 if __name__ == "__main__":

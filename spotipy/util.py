@@ -7,6 +7,7 @@ from urllib.parse import parse_qs
 from urllib.parse import urlparse
 
 import spotipy
+from spotipy import exceptions
 from . import oauth2
 
 PORT = 8080
@@ -101,11 +102,8 @@ def assert_port_available(port):
     try:
         s.bind(("", port))
     except socket.error:
-        raise spotipy.SpotifyException(
-            200,
-            -1,
-            "Port {} is not available. If you are currently running a server, "
-            "please halt it for a min.".format(port),
+        raise exceptions.SpotifyError(
+            "Port {} is not available. If you are currently running a server, " "please halt it for a min.".format(port)
         )
     finally:
         s.close()
@@ -133,20 +131,16 @@ def get_authentication_code(httpd):
 
     if "error" in httpd.latest_query_components:
         if httpd.latest_query_components["error"][0] == "access_denied":
-            raise spotipy.SpotifyException(200, -1, "The user rejected Spotify access")
+            raise exceptions.SpotifyError("The user rejected Spotify access")
         else:
-            raise spotipy.SpotifyException(
-                200,
-                -1,
-                "Unknown error from Spotify authentication server: {}".format(
-                    httpd.latest_query_components["error"][0]
-                ),
+            raise exceptions.SpotifyError(
+                "Unknown error from Spotify authentication server: {}".format(httpd.latest_query_components["error"][0])
             )
     if "code" in httpd.latest_query_components:
         code = httpd.latest_query_components["code"][0]
     else:
-        raise spotipy.SpotifyException(
-            200, -1, "Unknown response from Spotify authentication server: {}".format(httpd.latest_query_components)
+        raise exceptions.SpotifyError(
+            "Unknown response from Spotify authentication server: {}".format(httpd.latest_query_components)
         )
     return code
 
