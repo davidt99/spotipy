@@ -6,7 +6,6 @@ from http.server import HTTPServer
 from urllib.parse import parse_qs
 from urllib.parse import urlparse
 
-import spotipy
 from spotipy import exceptions
 from . import oauth2
 

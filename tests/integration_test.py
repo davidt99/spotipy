@@ -215,18 +215,38 @@ class PlayerSpec(BaseSpec):
         # Act
         self.sp.volume(100)
 
+        # Assert
+        playback = self.sp.current_playback()
+        self.assertEqual(playback["device"]["volume_percent"], 100)
+
     def test_set_volume_raise_device_not_found_when_device_not_exists(self):
         # Act
         with self.assertRaises(exceptions.DeviceNotFoundError):
             self.sp.volume(100, "foo")
 
-    def test_pause(self):
-        # Act
-        self.sp.pause_playback()
+    def test_play_and_pause(self):
+        # Arrange
+        original_is_playing = self.sp.currently_playing()["is_playing"]
 
-    def test_play(self):
-        # Act
-        self.sp.start_playback()
+        # Act 1
+        if original_is_playing:
+            self.sp.pause_playback()
+        else:
+            self.sp.start_playback()
+
+        # Assert 1
+        is_playing = self.sp.currently_playing()["is_playing"]
+        self.assertNotEqual(original_is_playing, is_playing)
+
+        # Act 2
+        if is_playing:
+            self.sp.pause_playback()
+        else:
+            self.sp.start_playback()
+
+        # Assert 1
+        is_playing = self.sp.currently_playing()["is_playing"]
+        self.assertEqual(original_is_playing, is_playing)
 
     def test_pause_raise_device_not_found_when_device_not_exists(self):
         # Act
@@ -240,7 +260,12 @@ class PlayerSpec(BaseSpec):
 
     def test_seek(self):
         # Act
-        self.sp.seek_track(1)
+        position_ms = 10000
+        self.sp.seek_track(position_ms)
+
+        # Assert
+        playback = self.sp.current_playback()
+        self.assertGreaterEqual(playback["progress_ms"], position_ms)
 
     def test_seek_raise_device_not_found_when_device_not_exists(self):
         # Act
@@ -251,9 +276,17 @@ class PlayerSpec(BaseSpec):
         # Act
         self.sp.shuffle(True)
 
+        # Assert
+        playback = self.sp.current_playback()
+        self.assertTrue(playback["shuffle_state"])
+
     def test_repeat(self):
         # Act
         self.sp.repeat("context")
+
+        # Assert
+        playback = self.sp.current_playback()
+        self.assertEqual(playback["repeat_state"], "context")
 
     def test_next(self):
         # Act
@@ -269,12 +302,6 @@ class PlayerSpec(BaseSpec):
 
         self.assertIsNotNone(playback)
 
-    def test_currently_playing(self):
-        # Act
-        playing = self.sp.currently_playing()
-
-        self.assertIsNotNone(playing)
-
     def test_devices(self):
         # Act
         devices = self.sp.devices()
@@ -284,8 +311,8 @@ class PlayerSpec(BaseSpec):
     def test_transfer_playback(self):
         # Arrange
         devices = self.sp.devices()
-        self.assertGreaterEqual(len(devices["devices"]), 1)
-        device = devices["devices"][0]
+        self.assertGreaterEqual(len(devices), 1)
+        device = devices[1]
 
         # Act
         self.sp.transfer_playback(device["id"])
@@ -379,92 +406,102 @@ class PlaylistSpec(BaseSpec):
         # Act 1
         self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
 
-        snapshot = self.sp.playlist_add_tracks(self.playlist_id, ["spotify:track:3fU0407Cls1hLW1ap5w2Lr"], 0)
+        snapshot_id = self.sp.playlist_add_tracks(self.playlist_id, ["spotify:track:3fU0407Cls1hLW1ap5w2Lr"], 0)
 
         # Assert
-        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot_id)
 
     def test_remove_all_track_occurrences_tack_playlist(self):
         # Act 1
         self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
         track = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
         self.sp.playlist_add_tracks(self.playlist_id, [track], 0)
-        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track], 1)
+        snapshot_id = self.sp.playlist_add_tracks(self.playlist_id, [track], 1)
 
         # Assert 1
-        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot_id)
 
         # Act 2
-        self.sp.playlist_remove_all_occurrences_of_tracks(self.playlist_id, [track], snapshot["snapshot_id"])
+        self.sp.playlist_remove_all_occurrences_of_tracks(self.playlist_id, [track], snapshot_id)
 
         #
-        playlist = self.sp.playlist_tracks(self.playlist_id)
-        self.assertEqual(0, playlist["total"])
+        tracks = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(0, tracks["total"])
 
     def test_remove_one_track_occurrence_from_playlist(self):
         # Act 1
         self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
         track = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
-        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track, track], 0)
+        snapshot_id = self.sp.playlist_add_tracks(self.playlist_id, [track, track], 0)
 
         # Assert 1
-        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot_id)
 
         # Act 2
         self.sp.playlist_remove_specific_occurrences_of_tracks(
-            self.playlist_id, [{"uri": track, "positions": [1]}], snapshot["snapshot_id"]
+            self.playlist_id, [{"uri": track, "positions": [1]}], snapshot_id
         )
 
         # Assert 2
-        playlist = self.sp.playlist_tracks(self.playlist_id)
-        self.assertEqual(1, playlist["total"])
+        tracks = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(1, tracks["total"])
 
     def test_replace_playlist_tracks(self):
         # Act 1
         self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
         track = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
         new_track = "spotify:track:2JB7PvDV0R3Vwbq0iy1WPe"
-        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track, track], 0)
+        snapshot_id = self.sp.playlist_add_tracks(self.playlist_id, [track, track], 0)
 
         # Assert 1
-        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot_id)
 
         # Act 2
         self.sp.playlist_replace_tracks(self.playlist_id, [new_track])
 
         # Assert 2
-        playlist = self.sp.playlist_tracks(self.playlist_id)
-        self.assertEqual(1, playlist["total"])
-        self.assertEqual(new_track, playlist["items"][0]["track"]["uri"])
+        tracks = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(1, tracks["total"])
+        self.assertEqual(new_track, tracks["items"][0]["track"]["uri"])
 
     def test_reorder_playlist_tracks(self):
         # Act 1
         self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
         track_1 = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
         track_2 = "spotify:track:2JB7PvDV0R3Vwbq0iy1WPe"
-        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track_1, track_2], 0)
+        snapshot_id = self.sp.playlist_add_tracks(self.playlist_id, [track_1, track_2], 0)
 
         # Assert 1
-        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot_id)
 
         # Act 2
-        self.sp.playlist_reorder_tracks(self.playlist_id, 1, 0, snapshot_id=snapshot["snapshot_id"])
+        self.sp.playlist_reorder_tracks(self.playlist_id, 1, 0, snapshot_id=snapshot_id)
 
         # Assert 2
-        playlist = self.sp.playlist_tracks(self.playlist_id)
-        self.assertEqual(2, playlist["total"])
-        self.assertEqual(track_2, playlist["items"][0]["track"]["uri"])
-        self.assertEqual(track_1, playlist["items"][1]["track"]["uri"])
+        tracks = self.sp.playlist_tracks(self.playlist_id)
+        self.assertEqual(2, tracks["total"])
+        self.assertEqual(track_2, tracks["items"][0]["track"]["uri"])
+        self.assertEqual(track_1, tracks["items"][1]["track"]["uri"])
+
+    def test_change_playlist_details(self):
+        # Arrange
+        self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
+
+        self.sp.playlist_change_details(self.playlist_id, "foo", description="bar")
+
+        playlist = self.sp.playlist(self.playlist_id)
+        self.assertEqual("foo", playlist["name"])
+        self.assertEqual("bar", playlist["description"])
 
     def test_follow_and_unfollow_playlist(self):
         # Act 1
         self.playlist_id = self.sp.user_playlist_create(self.user_id, "temp")["id"]
         track_1 = "spotify:track:33yAEqzKXexYM3WlOYtTfQ"
         track_2 = "spotify:track:2JB7PvDV0R3Vwbq0iy1WPe"
-        snapshot = self.sp.playlist_add_tracks(self.playlist_id, [track_1, track_2], 0)
+        snapshot_id = self.sp.playlist_add_tracks(self.playlist_id, [track_1, track_2], 0)
 
         # Assert 1
-        self.assertIsNotNone(snapshot)
+        self.assertIsNotNone(snapshot_id)
 
         # Act 2
         self.sp.playlist_unfollow(self.playlist_id)
