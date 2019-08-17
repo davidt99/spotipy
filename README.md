@@ -3,7 +3,7 @@
 ## Description
 
 Spotipy is a thin client library for the Spotify Web API.
-**This fork is not compatible with the original spotipy library, see the difference [section](#difference-between-plamere/spotipy)** 
+**This fork is not compatible with the original spotipy library, see the difference [section](#difference-between-plamerespotipy)** 
 
 ## Installation
 If you already have [Python](http://www.python.org/) on your system you can install the library simply by downloading the distribution, unpack it and install in the usual fashion:
